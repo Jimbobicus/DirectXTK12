@@ -628,6 +628,31 @@ void GeometricPrimitive::CreateIcosahedron(
     ComputeIcosahedron(vertices, indices, size, rhcoords);
 }
 
+//std::unique_ptr<GeometricPrimitive> GeometricPrimitive::CreateIcosphere(
+//    float size,
+//    bool rhcoords,
+//    _In_opt_ ID3D12Device* device)
+//{
+//    // Create the primitive object.
+//    std::unique_ptr<GeometricPrimitive> primitive(new GeometricPrimitive());
+//
+//    VertexCollection vertices;
+//    IndexCollection indices;
+//    ComputeIcosahedron(vertices, indices, size, rhcoords);
+//
+//    primitive->pImpl->Initialize(vertices, indices, device);
+//
+//    return primitive;
+//}
+//
+//void GeometricPrimitive::CreateIcosphere(
+//    std::vector<VertexType>& vertices,
+//    std::vector<uint16_t>& indices,
+//    float size,
+//    bool rhcoords)
+//{
+//    ComputeIcosahedron(vertices, indices, size, rhcoords);
+//}
 
 //--------------------------------------------------------------------------------------
 // Teapot
