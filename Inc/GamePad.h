@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: GamePad.h
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -58,6 +58,12 @@ namespace DirectX
         static constexpr int MAX_PLAYER_COUNT = 8;
     #else
         static constexpr int MAX_PLAYER_COUNT = 4;
+    #endif
+
+        static constexpr int c_MostRecent = -1;
+
+    #if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_GAMES)
+        static constexpr int c_MergedInput = -2;
     #endif
 
         enum DeadZone
@@ -278,7 +284,8 @@ namespace DirectX
 
     #if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_GAMES)
         // Underlying device access
-        void __cdecl GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept;
+        _Success_(return != false)
+        bool __cdecl GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept;
     #endif
 
         // Singleton

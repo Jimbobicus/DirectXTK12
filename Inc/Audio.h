@@ -3,7 +3,7 @@
 //
 // DirectXTK for Audio header
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -11,6 +11,13 @@
 //--------------------------------------------------------------------------------------
 
 #pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
 
 #include <objbase.h>
 #include <mmreg.h>
@@ -41,17 +48,15 @@
 #include <xapofx.h>
 
 #ifndef USING_XAUDIO2_REDIST
+#if defined(USING_XAUDIO2_8) && defined(NTDDI_WIN10) && !defined(_M_IX86)
+// The xaudio2_8.lib in the Windows 10 SDK for x86 is incorrectly annotated as __cdecl instead of __stdcall, so avoid using it in this case.
+#pragma comment(lib,"xaudio2_8.lib")
+#else
 #pragma comment(lib,"xaudio2.lib")
+#endif
 #endif
 
 #include <DirectXMath.h>
-
-
-#include <cstdint>
-#include <functional>
-#include <memory>
-#include <string>
-#include <vector>
 
 
 namespace DirectX

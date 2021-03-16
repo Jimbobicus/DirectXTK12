@@ -1,19 +1,21 @@
-# DirectX Tool Kit for DirectX 12
-#
-# Copyright (c) Microsoft Corporation. All rights reserved.
+# Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
-#
-# http://go.microsoft.com/fwlink/?LinkID=615561
 
 cmake_minimum_required (VERSION 3.11)
 
-project (DirectXTK12 LANGUAGES CXX)
+set(DIRECTXTK12_VERSION 1.4.4)
+
+project (DirectXTK12
+  VERSION ${DIRECTXTK12_VERSION}
+  DESCRIPTION "DirectX Tool Kit for DirectX 12"
+  HOMEPAGE_URL "https://go.microsoft.com/fwlink/?LinkID=615561"
+  LANGUAGES CXX)
 
 option(BUILD_XAUDIO_WIN10 "Build for XAudio 2.9" ON)
 
 option(ENABLE_CODE_ANALYSIS "Use Static Code Analysis on build" OFF)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -21,7 +23,8 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/CMake")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/CMake")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/CMake")
 
-set(LIBRARY_SOURCES
+#--- Library
+set(LIBRARY_HEADERS
     Inc/BufferHelpers.h
     Inc/CommonStates.h
     Inc/DDSTextureLoader.h
@@ -45,7 +48,9 @@ set(LIBRARY_SOURCES
     Inc/SpriteBatch.h
     Inc/SpriteFont.h
     Inc/VertexTypes.h
-    Inc/WICTextureLoader.h
+    Inc/WICTextureLoader.h)
+
+set(LIBRARY_SOURCES
     Src/AlignedNew.h
     Src/AlphaTestEffect.cpp
     Src/BasicEffect.cpp
@@ -56,7 +61,7 @@ set(LIBRARY_SOURCES
     Src/BufferHelpers.cpp
     Src/CommonStates.cpp
     Src/d3dx12.h
-    Src/dds.h
+    Src/DDS.h
     Src/DDSTextureLoader.cpp
     Src/DebugEffect.cpp
     Src/DemandCreate.h
@@ -125,8 +130,10 @@ set(SHADER_SOURCES
     Src/Shaders/Utilities.fxh)
 
 if(BUILD_XAUDIO_WIN10)
+    set(LIBRARY_HEADERS ${LIBRARY_HEADERS}
+        Inc/Audio.h)
+
     set(LIBRARY_SOURCES ${LIBRARY_SOURCES}
-        Inc/Audio.h
         Audio/AudioEngine.cpp
         Audio/DynamicSoundEffectInstance.cpp
         Audio/SoundCommon.cpp
@@ -141,11 +148,8 @@ if(BUILD_XAUDIO_WIN10)
         Audio/WAVFileReader.h)
 endif()
 
-add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES} Src/Shaders/Compiled/SpriteEffect_SpriteVertexShader.inc)
-
-if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${PROJECT_NAME} PRIVATE Src/pch.h)
-endif()
+set(LIBRARY_SOURCES ${LIBRARY_SOURCES}
+    Src/Shaders/Compiled/SpriteEffect_SpriteVertexShader.inc)
 
 add_custom_command(
     OUTPUT "${PROJECT_SOURCE_DIR}/Src/Shaders/Compiled/SpriteEffect_SpriteVertexShader.inc"
@@ -156,15 +160,22 @@ add_custom_command(
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/Src/Shaders"
     USES_TERMINAL)
 
+add_library(${PROJECT_NAME} STATIC ${LIBRARY_SOURCES} ${LIBRARY_HEADERS})
+
+if (${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${PROJECT_NAME} PRIVATE Src/pch.h)
+endif()
+
 source_group(Audio REGULAR_EXPRESSION Audio/*.*)
 source_group(Inc REGULAR_EXPRESSION Inc/*.*)
 source_group(Src REGULAR_EXPRESSION Src/*.*)
 
-target_include_directories(${PROJECT_NAME} PUBLIC Inc)
-target_include_directories(${PROJECT_NAME} PRIVATE Src)
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/Inc>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
 
 if(BUILD_XAUDIO_WIN10)
-    target_include_directories(${PROJECT_NAME} PRIVATE Audio)
+    target_include_directories(${PROJECT_NAME} PRIVATE Src Audio)
 endif()
 
 if(MSVC)
@@ -178,18 +189,57 @@ if(MSVC)
     # Library needs /EHsc (Enable C++ exceptions)
 endif()
 
+if (VCPKG_TOOLCHAIN)
+    message("INFO: Using VCPKG for DirectXMath.")
+    find_package(directxmath CONFIG REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE Microsoft::DirectXMath)
+endif()
+
+#--- Package
+include(CMakePackageConfigHelpers)
+
+string(TOLOWER ${PROJECT_NAME} PACKAGE_NAME)
+
+write_basic_package_version_file(
+  ${PROJECT_BINARY_DIR}/cmake/${PACKAGE_NAME}-config-version.cmake
+  VERSION ${DIRECTXTK12_VERSION}
+  COMPATIBILITY AnyNewerVersion)
+
+install(TARGETS ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}-targets
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
+
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/.nuget/${PROJECT_NAME}-config.cmake.in
+  ${PROJECT_BINARY_DIR}/cmake/${PACKAGE_NAME}-config.cmake
+  INSTALL_DESTINATION cmake/})
+
+install(EXPORT ${PROJECT_NAME}-targets
+  FILE ${PROJECT_NAME}-targets.cmake
+  NAMESPACE Microsoft::
+  DESTINATION cmake/)
+
+install(FILES ${LIBRARY_HEADERS}
+    DESTINATION include/${PROJECT_NAME})
+
+install(FILES
+    ${PROJECT_BINARY_DIR}/cmake/${PACKAGE_NAME}-config.cmake
+    ${PROJECT_BINARY_DIR}/cmake/${PACKAGE_NAME}-config-version.cmake
+  DESTINATION cmake/)
+
 if(MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /fp:fast)
 
-    if (${CMAKE_SIZEOF_VOID_P} EQUAL "4")
+    if (${CMAKE_SIZEOF_VOID_P} EQUAL "4" AND (NOT ${CMAKE_VS_PLATFORM_NAME} MATCHES "arm"))
         target_compile_options(${PROJECT_NAME} PRIVATE /arch:SSE2)
     endif()
 endif()
 
-if ( CMAKE_CXX_COMPILER_ID MATCHES "Clang" )
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(${PROJECT_NAME} PRIVATE -Wpedantic -Wextra)
 endif()
-if ( CMAKE_CXX_COMPILER_ID MATCHES "MSVC" )
+if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     target_compile_options(${PROJECT_NAME} PRIVATE /permissive- /JMC- /Zc:__cplusplus)
 
    if(ENABLE_CODE_ANALYSIS)

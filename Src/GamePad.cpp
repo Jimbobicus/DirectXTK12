@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: GamePad.cpp
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -100,7 +100,7 @@ public:
     {
         if (s_gamePad)
         {
-            throw std::exception("GamePad is a singleton");
+            throw std::logic_error("GamePad is a singleton");
         }
 
         s_gamePad = this;
@@ -129,10 +129,9 @@ public:
         {
             if (mGameInput)
             {
-                HRESULT hr = mGameInput->UnregisterCallback(mDeviceToken, UINT64_MAX);
-                if (FAILED(hr))
+                if (!mGameInput->UnregisterCallback(mDeviceToken, UINT64_MAX))
                 {
-                    DebugTrace("ERROR: GameInput::UnregisterCallback [gamepad] failed (%08X)", static_cast<unsigned int>(hr));
+                    DebugTrace("ERROR: GameInput::UnregisterCallback [gamepad] failed");
                 }
             }
 
@@ -144,61 +143,71 @@ public:
 
     void GetState(int player, _Out_ State& state, DeadZone deadZoneMode)
     {
-        if (player == -1)
-            player = mMostRecentGamepad;
+        memset(&state, 0, sizeof(State));
+
+        IGameInputDevice* device = nullptr;
 
         if (player >= 0 && player < MAX_PLAYER_COUNT)
         {
-            IGameInputDevice* device = mInputDevices[player].Get();
-            if (device)
-            {
-                ComPtr<IGameInputReading> reading;
-                if (SUCCEEDED(mGameInput->GetCurrentReading(GameInputKindGamepad, device, reading.GetAddressOf())))
-                {
-                    GameInputGamepadState pad;
-                    if (reading->GetGamepadState(&pad))
-                    {
-                        state.connected = true;
-                        state.packet = reading->GetSequenceNumber(GameInputKindGamepad);
-
-                        state.buttons.a = (pad.buttons & GameInputGamepadA) != 0;
-                        state.buttons.b = (pad.buttons & GameInputGamepadB) != 0;
-                        state.buttons.x = (pad.buttons & GameInputGamepadX) != 0;
-                        state.buttons.y = (pad.buttons & GameInputGamepadY) != 0;
-                        state.buttons.leftStick = (pad.buttons & GameInputGamepadLeftThumbstick) != 0;
-                        state.buttons.rightStick = (pad.buttons & GameInputGamepadRightThumbstick) != 0;
-                        state.buttons.leftShoulder = (pad.buttons & GameInputGamepadLeftShoulder) != 0;
-                        state.buttons.rightShoulder = (pad.buttons & GameInputGamepadRightShoulder) != 0;
-                        state.buttons.view = (pad.buttons & GameInputGamepadView) != 0;
-                        state.buttons.menu = (pad.buttons & GameInputGamepadMenu) != 0;
-
-                        state.dpad.up = (pad.buttons & GameInputGamepadDPadUp) != 0;
-                        state.dpad.down = (pad.buttons & GameInputGamepadDPadDown) != 0;
-                        state.dpad.right = (pad.buttons & GameInputGamepadDPadRight) != 0;
-                        state.dpad.left = (pad.buttons & GameInputGamepadDPadLeft) != 0;
-
-                        ApplyStickDeadZone(pad.leftThumbstickX, pad.leftThumbstickY,
-                            deadZoneMode, 1.f, c_XboxOneThumbDeadZone,
-                            state.thumbSticks.leftX, state.thumbSticks.leftY);
-
-                        ApplyStickDeadZone(pad.rightThumbstickX, pad.rightThumbstickY,
-                            deadZoneMode, 1.f, c_XboxOneThumbDeadZone,
-                            state.thumbSticks.rightX, state.thumbSticks.rightY);
-
-                        state.triggers.left = pad.leftTrigger;
-                        state.triggers.right = pad.rightTrigger;
-                        return;
-                    }
-                }
-            }
+            device = mInputDevices[player].Get();
+            if (!device)
+                return;
+        }
+        else if (player == c_MostRecent)
+        {
+            player = mMostRecentGamepad;
+            assert(player >= 0 && player < MAX_PLAYER_COUNT);
+            device = mInputDevices[player].Get();
+            if (!device)
+                return;
+        }
+        else if (player != c_MergedInput)
+        {
+            return;
         }
 
-        memset(&state, 0, sizeof(State));
+        ComPtr<IGameInputReading> reading;
+        if (SUCCEEDED(mGameInput->GetCurrentReading(GameInputKindGamepad, device, reading.GetAddressOf())))
+        {
+            GameInputGamepadState pad;
+            if (reading->GetGamepadState(&pad))
+            {
+                state.connected = true;
+                state.packet = reading->GetSequenceNumber(GameInputKindGamepad);
+
+                state.buttons.a = (pad.buttons & GameInputGamepadA) != 0;
+                state.buttons.b = (pad.buttons & GameInputGamepadB) != 0;
+                state.buttons.x = (pad.buttons & GameInputGamepadX) != 0;
+                state.buttons.y = (pad.buttons & GameInputGamepadY) != 0;
+                state.buttons.leftStick = (pad.buttons & GameInputGamepadLeftThumbstick) != 0;
+                state.buttons.rightStick = (pad.buttons & GameInputGamepadRightThumbstick) != 0;
+                state.buttons.leftShoulder = (pad.buttons & GameInputGamepadLeftShoulder) != 0;
+                state.buttons.rightShoulder = (pad.buttons & GameInputGamepadRightShoulder) != 0;
+                state.buttons.view = (pad.buttons & GameInputGamepadView) != 0;
+                state.buttons.menu = (pad.buttons & GameInputGamepadMenu) != 0;
+
+                state.dpad.up = (pad.buttons & GameInputGamepadDPadUp) != 0;
+                state.dpad.down = (pad.buttons & GameInputGamepadDPadDown) != 0;
+                state.dpad.right = (pad.buttons & GameInputGamepadDPadRight) != 0;
+                state.dpad.left = (pad.buttons & GameInputGamepadDPadLeft) != 0;
+
+                ApplyStickDeadZone(pad.leftThumbstickX, pad.leftThumbstickY,
+                    deadZoneMode, 1.f, c_XboxOneThumbDeadZone,
+                    state.thumbSticks.leftX, state.thumbSticks.leftY);
+
+                ApplyStickDeadZone(pad.rightThumbstickX, pad.rightThumbstickY,
+                    deadZoneMode, 1.f, c_XboxOneThumbDeadZone,
+                    state.thumbSticks.rightX, state.thumbSticks.rightY);
+
+                state.triggers.left = pad.leftTrigger;
+                state.triggers.right = pad.rightTrigger;
+            }
+        }
     }
 
     void GetCapabilities(int player, _Out_ Capabilities& caps)
     {
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if (player >= 0 && player < MAX_PLAYER_COUNT)
@@ -228,7 +237,7 @@ public:
 
     bool SetVibration(int player, float leftMotor, float rightMotor, float leftTrigger, float rightTrigger) noexcept
     {
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if (player >= 0 && player < MAX_PLAYER_COUNT)
@@ -279,12 +288,13 @@ public:
         }
     }
 
-    void GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept
+    _Success_(return != false)
+    bool GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept
     {
         if (!device)
-            return;
+            return false;
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         *device = nullptr;
@@ -296,8 +306,11 @@ public:
             {
                 dev->AddRef();
                 *device = dev;
+                return true;
             }
         }
+
+        return false;
     }
 
     GamePad*    mOwner;
@@ -406,7 +419,7 @@ public:
 
         if (s_gamePad)
         {
-            throw std::exception("GamePad is a singleton");
+            throw std::logic_error("GamePad is a singleton");
         }
 
         s_gamePad = this;
@@ -414,7 +427,7 @@ public:
         mChanged.reset(CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE));
         if (!mChanged)
         {
-            throw std::exception("CreateEventEx");
+            throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "CreateEventEx");
         }
 
         ThrowIfFailed(GetActivationFactory(HStringReference(RuntimeClass_Windows_Gaming_Input_Gamepad).Get(), mStatics.GetAddressOf()));
@@ -478,7 +491,7 @@ public:
             ScanGamePads();
         }
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -543,7 +556,7 @@ public:
             ScanGamePads();
         }
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -602,7 +615,7 @@ public:
     {
         using namespace ABI::Windows::Gaming::Input;
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -889,7 +902,7 @@ public:
 
         if (s_gamePad)
         {
-            throw std::exception("GamePad is a singleton");
+            throw std::logic_error("GamePad is a singleton");
         }
 
         s_gamePad = this;
@@ -897,7 +910,7 @@ public:
         mChanged.reset(CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE));
         if (!mChanged)
         {
-            throw std::exception("CreateEventEx");
+            throw std::system_error(std::error_code(static_cast<int>(GetLastError()), std::system_category()), "CreateEventEx");
         }
 
         ThrowIfFailed(GetActivationFactory(HStringReference(RuntimeClass_Windows_Xbox_Input_Gamepad).Get(), mStatics.GetAddressOf()));
@@ -947,7 +960,7 @@ public:
             ScanGamePads();
         }
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -1009,7 +1022,7 @@ public:
             ScanGamePads();
         }
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -1073,7 +1086,7 @@ public:
     {
         using namespace ABI::Windows::Xbox::Input;
 
-        if (player == -1)
+        if (player == c_MostRecent)
             player = mMostRecentGamepad;
 
         if ((player >= 0) && (player < MAX_PLAYER_COUNT))
@@ -1190,7 +1203,7 @@ private:
                 {
                     if (empty >= MAX_PLAYER_COUNT)
                     {
-                        throw std::exception("Too many gamepads found");
+                        throw std::runtime_error("Too many gamepads found");
                     }
 
                     mGamePad[empty] = pad;
@@ -1244,7 +1257,7 @@ public:
 
         if (s_gamePad)
         {
-            throw std::exception("GamePad is a singleton");
+            throw std::logic_error("GamePad is a singleton");
         }
 
         s_gamePad = this;
@@ -1257,7 +1270,7 @@ public:
 
     void GetState(int player, _Out_ State& state, DeadZone deadZoneMode)
     {
-        if (player == -1)
+        if (player == c_MostRecent)
             player = GetMostRecent();
 
         ULONGLONG time = GetTickCount64();
@@ -1334,7 +1347,7 @@ public:
 
     void GetCapabilities(int player, _Out_ Capabilities& caps)
     {
-        if (player == -1)
+        if (player == c_MostRecent)
             player = GetMostRecent();
 
         ULONGLONG time = GetTickCount64();
@@ -1391,7 +1404,7 @@ public:
 
     bool SetVibration(int player, float leftMotor, float rightMotor, float leftTrigger, float rightTrigger) noexcept
     {
-        if (player == -1)
+        if (player == c_MostRecent)
             player = GetMostRecent();
 
         ULONGLONG time = GetTickCount64();
@@ -1638,9 +1651,9 @@ void GamePad::RegisterEvents(HANDLE ctrlChanged) noexcept
     pImpl->mCtrlChanged = (!ctrlChanged) ? INVALID_HANDLE_VALUE : ctrlChanged;
 }
 
-void GamePad::GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept
+bool GamePad::GetDevice(int player, _Outptr_ IGameInputDevice** device) noexcept
 {
-    pImpl->GetDevice(player, device);
+    return pImpl->GetDevice(player, device);
 }
 #elif ((_WIN32_WINNT >= _WIN32_WINNT_WIN10) && !defined(_GAMING_DESKTOP)) || defined(_XBOX_ONE)
 void GamePad::RegisterEvents(HANDLE ctrlChanged, HANDLE userChanged) noexcept
@@ -1654,7 +1667,7 @@ void GamePad::RegisterEvents(HANDLE ctrlChanged, HANDLE userChanged) noexcept
 GamePad& GamePad::Get()
 {
     if (!Impl::s_gamePad || !Impl::s_gamePad->mOwner)
-        throw std::exception("GamePad is a singleton");
+        throw std::logic_error("GamePad singleton not created");
 
     return *Impl::s_gamePad->mOwner;
 }

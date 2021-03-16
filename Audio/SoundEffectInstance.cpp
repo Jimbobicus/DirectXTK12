@@ -1,7 +1,7 @@
 //--------------------------------------------------------------------------------------
 // File: SoundEffectInstance.cpp
 //
-// Copyright (c) Microsoft Corporation. All rights reserved.
+// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 //
 // http://go.microsoft.com/fwlink/?LinkId=248929
@@ -215,7 +215,7 @@ void SoundEffectInstance::Impl::Play(bool loop)
             wfx->wFormatTag, wfx->nChannels, wfx->wBitsPerSample, wfx->nSamplesPerSec, length);
     #endif
         mBase.Stop(true, mLooped);
-        throw std::exception("SubmitSourceBuffer");
+        throw std::runtime_error("SubmitSourceBuffer");
     }
 }
 
